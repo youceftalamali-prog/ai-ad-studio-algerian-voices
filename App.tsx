@@ -204,6 +204,7 @@ export default function App() {
           {activeTab === 'admin' && isAdmin ? (
             <AdminDashboard />
           ) : (
+            <>
           <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           {errorMessage && (
             <div className="mb-6 p-4 rounded-2xl bg-red-950/60 border border-red-500/50 flex items-center justify-between gap-3 text-red-200 text-sm">
@@ -312,6 +313,7 @@ export default function App() {
             </div>
           </div>
         </footer>
+            </>
           )}
       </>
     )}
