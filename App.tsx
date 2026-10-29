@@ -6,6 +6,7 @@ import { CampaignDisplay } from './components/CampaignDisplay';
 import { AlgerianOutroStudio } from './components/AlgerianOutroStudio';
 import { PersonaVoiceGenerator } from './components/PersonaVoiceGenerator';
 import { ChatbotInterface } from './components/ChatbotInterface';
+import { AdminDashboard } from './components/AdminDashboard';
 import { EmailCampaign } from './types/index';
 import { generateDefaultCampaign } from './utils/campaign';
 import { Sparkles, AlertCircle, Wand2, Mic, MessageSquare } from 'lucide-react';
@@ -13,6 +14,8 @@ import { Sparkles, AlertCircle, Wand2, Mic, MessageSquare } from 'lucide-react';
 export default function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('landing');
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL as string | undefined;
+  const isAdmin = Boolean(adminEmail && currentUserEmail && currentUserEmail.toLowerCase() === adminEmail.toLowerCase());
   const [campaign, setCampaign] = useState<EmailCampaign>(() =>
     generateDefaultCampaign('SaaS Product Launch with 30% Lifetime Discount')
   );
@@ -179,7 +182,11 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenSample={handleLoadDemo}
         currentUserEmail={currentUserEmail}
-        onSignOut={() => setCurrentUserEmail(null)}
+        onSignOut={() => {
+          setCurrentUserEmail(null);
+          if (activeTab === 'admin') setActiveTab('landing');
+        }}
+        isAdmin={isAdmin}
       />
 
       {/* When active tab is Landing Page / Public Pricing */}
@@ -194,6 +201,9 @@ export default function App() {
       ) : (
         /* Main Studio Container */
         <>
+          {activeTab === 'admin' && isAdmin ? (
+            <AdminDashboard />
+          ) : (
           <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           {errorMessage && (
             <div className="mb-6 p-4 rounded-2xl bg-red-950/60 border border-red-500/50 flex items-center justify-between gap-3 text-red-200 text-sm">
@@ -302,6 +312,7 @@ export default function App() {
             </div>
           </div>
         </footer>
+          )}
       </>
     )}
   </div>
