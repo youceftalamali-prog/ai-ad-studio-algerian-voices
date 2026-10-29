@@ -1,7 +1,7 @@
 import React from 'react';
-import { Mail, Mic, MessageSquare, Sparkles, Wand2 } from 'lucide-react';
+import { Mic, MessageSquare, Settings2, Sparkles } from 'lucide-react';
 
-export type AppTab = 'landing' | 'persona_studio' | 'algerian_outros' | 'campaign' | 'chat';
+export type AppTab = 'landing' | 'persona_studio' | 'algerian_outros' | 'campaign' | 'chat' | 'admin';
 
 interface HeaderProps {
   activeTab: AppTab;
@@ -9,6 +9,7 @@ interface HeaderProps {
   onOpenSample?: () => void;
   currentUserEmail?: string | null;
   onSignOut?: () => void;
+  isAdmin?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSample,
   currentUserEmail,
   onSignOut,
+  isAdmin = false,
 }) => {
   return (
     <header className="border-b border-slate-800 bg-slate-950/90 backdrop-blur-md sticky top-0 z-40">
@@ -86,6 +88,15 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <span>خواتم الولايات</span>
           </button>
+
+          {isAdmin && <button
+            onClick={() => setActiveTab('admin')}
+            aria-label="لوحة التحكم الإدارية"
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all shrink-0 ${activeTab === 'admin' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-amber-200 hover:bg-slate-800/60'}`}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            <span>الإدارة</span>
+          </button>}
 
           <button
             onClick={() => setActiveTab('chat')}
