@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AudioLines, Check, CheckCircle2, CreditCard, Globe2, KeyRound,
-  Languages, LockKeyhole, Palette, Play, Plus, Save, Search, Settings2,
-  ShieldCheck, Store, Trash2, Upload, Users, X, XCircle, Eye, EyeOff,
+  Languages, LockKeyhole, Palette, Plus, Save, Search, Settings2,
+  ShieldCheck, Trash2, Upload, Users, X, XCircle, Eye, EyeOff,
 } from 'lucide-react';
 
 type SubscriptionStatus = 'pending' | 'active' | 'rejected';
