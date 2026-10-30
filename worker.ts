@@ -221,7 +221,7 @@ export default {
           const safeMessage = err.message
             .replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[redacted-database-url]")
             .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
-            .replace(/\b(?:password|passwd|token|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+            .replace(/\b(password|passwd|token|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
             .slice(0, 500);
           console.error("auth_operation_failed", {
             route: url.pathname,
