@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Header, AppTab } from './components/Header';
 import { PublicPricingWithAudioPreview } from './components/PublicPricingWithAudioPreview';
 import { CampaignForm } from './components/CampaignForm';
@@ -22,6 +22,22 @@ export default function App() {
   const [isGeneratingCampaign, setIsGeneratingCampaign] = useState(false);
   const [isGeneratingVisual, setIsGeneratingVisual] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Restore the server-validated session after refresh; never trust localStorage for identity.
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/me', { credentials: 'same-origin', cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (active && data?.authenticated && data.user?.email) {
+          setCurrentUserEmail(data.user.email);
+        }
+      })
+      .catch(() => {
+        // A visitor without a session simply remains signed out.
+      });
+    return () => { active = false; };
+  }, []);
 
   const handleGenerateCampaign = async (formData: {
     prompt: string;
@@ -182,9 +198,16 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenSample={handleLoadDemo}
         currentUserEmail={currentUserEmail}
-        onSignOut={() => {
-          setCurrentUserEmail(null);
-          if (activeTab === 'admin') setActiveTab('landing');
+        onSignOut={async () => {
+          try {
+            await fetch('/api/auth/logout', {
+              method: 'POST',
+              credentials: 'same-origin',
+            });
+          } finally {
+            setCurrentUserEmail(null);
+            if (activeTab === 'admin') setActiveTab('landing');
+          }
         }}
         isAdmin={isAdmin}
       />
