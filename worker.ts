@@ -1,5 +1,8 @@
+import { neon } from "@neondatabase/serverless";
+
 interface Env {
   ASSETS: Fetcher;
+  DATABASE_URL?: string;
 }
 
 const json = (body: Record<string, unknown>, status = 200): Response =>
@@ -21,6 +24,25 @@ export default {
         service: "ai-ad-studio-algerian-voices",
         timestamp: new Date().toISOString(),
       });
+    }
+
+    if (url.pathname === "/api/db/health" && request.method === "GET") {
+      if (!env.DATABASE_URL) {
+        return json({ ok: false, database: "not_configured" }, 503);
+      }
+
+      try {
+        const sql = neon(env.DATABASE_URL);
+        const result = await sql`SELECT 1 AS connected`;
+        return json({
+          ok: true,
+          database: "connected",
+          check: result[0]?.connected === 1,
+        });
+      } catch {
+        // Never return connection strings, credentials, or raw database errors.
+        return json({ ok: false, database: "connection_failed" }, 503);
+      }
     }
 
     if (url.pathname.startsWith("/api/")) {
