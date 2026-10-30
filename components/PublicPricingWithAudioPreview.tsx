@@ -1024,8 +1024,12 @@ export const PublicPricingWithAudioPreview: React.FC<PublicPricingWithAudioPrevi
               </div>
             )}
 
-            <div className="mb-5 rounded-xl border border-slate-700 bg-slate-950/70 p-3 text-xs leading-6 text-slate-300">
-              تسجيل آمن بالبريد الإلكتروني وكلمة المرور. تسجيل Google غير متاح حالياً حتى نربطه بمزوّد OAuth حقيقي.
+            <a href="/api/auth/google" className="mb-5 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-600 bg-white px-4 py-3 text-sm font-bold text-slate-800 transition hover:bg-slate-100">
+              <span className="text-lg font-black text-blue-600">G</span>
+              <span>المتابعة باستخدام Google</span>
+            </a>
+            <div className="mb-5 flex items-center gap-3 text-xs text-slate-500">
+              <span className="h-px flex-1 bg-slate-700" /><span>أو بالبريد الإلكتروني</span><span className="h-px flex-1 bg-slate-700" />
             </div>
 
             {/* Method 2: Traditional Email & Password Form */}
