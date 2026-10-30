@@ -175,9 +175,11 @@ export default {
           return json({ ok: false, error: "تحقق من البريد الإلكتروني. كلمة المرور يجب أن تكون بين 12 و128 حرفاً." }, 400);
         }
 
+        let authStage = "start";
         try {
           let user: Record<string, unknown> | undefined;
           if (url.pathname === "/api/auth/signup") {
+            authStage = "signup_user_insert";
             const displayName = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
             const phone = typeof body.phone === "string" ? body.phone.trim().slice(0, 30) : null;
             if (displayName.length < 2) return json({ ok: false, error: "أدخل الاسم الكامل أو اسم المتجر." }, 400);
@@ -191,6 +193,7 @@ export default {
             user = inserted[0] as Record<string, unknown> | undefined;
             if (!user) return json({ ok: false, error: "هذا البريد مسجل من قبل. سجل الدخول بدلاً من ذلك." }, 409);
           } else {
+            authStage = "login_user_lookup";
             const rows = await sql`
               SELECT id, email, display_name, password_hash
               FROM app_users
@@ -204,6 +207,7 @@ export default {
             user = { id: existing.id, email: existing.email, display_name: existing.display_name };
           }
 
+          authStage = "session_insert";
           const token = randomToken();
           const tokenHash = await sha256(token);
           const maxAge = (remember ? SESSION_DAYS : 1) * 24 * 60 * 60;
@@ -212,8 +216,20 @@ export default {
             VALUES (${user.id}, ${tokenHash}, NOW() + (${maxAge} * INTERVAL '1 second'))
           `;
           return json({ ok: true, user }, 200, { "set-cookie": sessionCookie(token, maxAge) });
-        } catch {
-          return json({ ok: false, error: "تعذر إتمام العملية حالياً. تحقق من إعداد قاعدة البيانات وحاول مجدداً." }, 503);
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error("Unknown non-Error exception");
+          const safeMessage = err.message
+            .replace(/postgres(?:ql)?:\/\/[^\s"'<>]+/gi, "[redacted-database-url]")
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+            .replace(/\b(?:password|passwd|token|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+            .slice(0, 500);
+          console.error("auth_operation_failed", {
+            route: url.pathname,
+            stage: authStage,
+            errorType: err.name,
+            errorMessage: safeMessage,
+          });
+          return json({ ok: false, error: "تعذر إتمام العملية حالياً. حاول مجدداً." }, 503);
         }
       }
 
