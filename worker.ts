@@ -3,7 +3,13 @@ import { neon } from "@neondatabase/serverless";
 interface Env {
   ASSETS: Fetcher;
   DATABASE_URL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
 }
+
+const GOOGLE_STATE_COOKIE = "__Host-aistudio_google_state";
+const GOOGLE_VERIFIER_COOKIE = "__Host-aistudio_google_verifier";
+const clearOAuthCookie = (name: string): string => `${name}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`;
 
 const SESSION_COOKIE = "__Host-aistudio_session";
 const SESSION_DAYS = 30;
@@ -126,6 +132,82 @@ export default {
         return json({ ok: true, database: "connected", check: result[0]?.connected === 1 });
       } catch {
         return json({ ok: false, database: "connection_failed" }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/auth/google" && request.method === "GET") {
+      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return json({ ok: false, error: "Google OAuth is not configured." }, 503);
+      const state = randomToken(24);
+      const verifier = randomToken(48);
+      const challenge = base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+      const googleUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      googleUrl.search = new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        redirect_uri: `${url.origin}/api/auth/google/callback`,
+        response_type: "code", scope: "openid email profile", state,
+        code_challenge: challenge, code_challenge_method: "S256", prompt: "select_account",
+      }).toString();
+      return new Response(null, { status: 302, headers: {
+        location: googleUrl.toString(),
+        "set-cookie": [
+          `${GOOGLE_STATE_COOKIE}=${state}; Max-Age=600; Path=/; HttpOnly; Secure; SameSite=Lax`,
+          `${GOOGLE_VERIFIER_COOKIE}=${verifier}; Max-Age=600; Path=/; HttpOnly; Secure; SameSite=Lax`,
+        ].join(", "), "cache-control": "no-store",
+      }});
+    }
+
+    if (url.pathname === "/api/auth/google/callback" && request.method === "GET") {
+      const clearOAuth = [clearOAuthCookie(GOOGLE_STATE_COOKIE), clearOAuthCookie(GOOGLE_VERIFIER_COOKIE)].join(", ");
+      const state = url.searchParams.get("state");
+      const code = url.searchParams.get("code");
+      const verifier = getCookie(request, GOOGLE_VERIFIER_COOKIE);
+      if (!state || state !== getCookie(request, GOOGLE_STATE_COOKIE) || !code || !verifier || !env.DATABASE_URL || !env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+        return new Response(null, { status: 302, headers: { location: "/#auth-section?google=error", "set-cookie": clearOAuth, "cache-control": "no-store" }});
+      }
+      try {
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET,
+            redirect_uri: `${url.origin}/api/auth/google/callback`, grant_type: "authorization_code", code_verifier: verifier,
+          }),
+        });
+        if (!tokenResponse.ok) throw new Error("Google token exchange failed");
+        const tokenData = await tokenResponse.json() as { access_token?: string };
+        if (!tokenData.access_token) throw new Error("Google access token missing");
+        const profileResponse = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+          headers: { authorization: `Bearer ${tokenData.access_token}` },
+        });
+        if (!profileResponse.ok) throw new Error("Google profile request failed");
+        const profile = await profileResponse.json() as { id?: string; email?: string; verified_email?: boolean; name?: string };
+        const googleId = typeof profile.id === "string" ? profile.id : "";
+        const email = typeof profile.email === "string" ? profile.email.trim().toLowerCase() : "";
+        const displayName = typeof profile.name === "string" ? profile.name.trim().slice(0, 120) : "";
+        if (!googleId || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || profile.verified_email !== true || !displayName) throw new Error("Unverified Google profile");
+        const subject = `google:${googleId}`;
+        const found = await sql`SELECT id, email, display_name, auth_subject, status FROM app_users WHERE auth_subject = ${subject} OR LOWER(email) = ${email} LIMIT 1`;
+        let user = found[0] as Record<string, unknown> | undefined;
+        if (user && user.status !== "active") throw new Error("Account inactive");
+        if (user && user.auth_subject && user.auth_subject !== subject) throw new Error("Identity conflict");
+        if (user) {
+          const updated = await sql`UPDATE app_users SET auth_subject = ${subject}, email = ${email}, display_name = COALESCE(NULLIF(display_name, ''), ${displayName}), updated_at = NOW() WHERE id = ${user.id} RETURNING id, email, display_name`;
+          user = updated[0] as Record<string, unknown>;
+        } else {
+          const inserted = await sql`INSERT INTO app_users (auth_subject, email, display_name) VALUES (${subject}, ${email}, ${displayName}) RETURNING id, email, display_name`;
+          user = inserted[0] as Record<string, unknown>;
+        }
+        const token = randomToken();
+        const tokenHash = await sha256(token);
+        const maxAge = SESSION_DAYS * 24 * 60 * 60;
+        await sql`INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES (${user.id}, ${tokenHash}, NOW() + (${maxAge} * INTERVAL '1 second'))`;
+        return new Response(null, { status: 302, headers: {
+          location: "/#auth-section?google=success",
+          "set-cookie": [sessionCookie(token, maxAge), clearOAuthCookie(GOOGLE_STATE_COOKIE), clearOAuthCookie(GOOGLE_VERIFIER_COOKIE)].join(", "),
+          "cache-control": "no-store",
+        }});
+      } catch (error) {
+        console.error("google_oauth_failed", error instanceof Error ? error.name : "UnknownError");
+        return new Response(null, { status: 302, headers: { location: "/#auth-section?google=error", "set-cookie": clearOAuth, "cache-control": "no-store" }});
       }
     }
 
